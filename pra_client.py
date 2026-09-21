@@ -8,14 +8,15 @@ Every URL, parameter and field in this module comes from the spec files in this 
 
 If something is not in those files, it does not belong here.
 
-Stage 1 scope: obtain a token and read users. There are no write methods.
+Stages 1-2 scope: obtain a token and read users, their group policies, and the names of the
+vendor's security provider and group policy. There are no write methods.
 """
 
 import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import requests
 
@@ -193,7 +194,7 @@ class PageInfo:
 
 
 class PraClient:
-    """OAuth 2 client-credentials client for one PRA appliance. Read-only in stage 1."""
+    """OAuth 2 client-credentials client for one PRA appliance. Read-only through stage 2."""
 
     # Refresh the token this many seconds before the appliance says it expires.
     TOKEN_SKEW_SECONDS = 60
@@ -282,6 +283,41 @@ class PraClient:
             params["security_provider_id"] = security_provider_id
         resp = self.get(f"{self.config_base}/user", params=params)
         return resp.json(), PageInfo.from_headers(resp.headers)
+
+    def iter_users(self, security_provider_id: int) -> Iterator[Dict[str, Any]]:
+        """Every User in one security provider, walking all pages of GET /user.
+
+        The filter is mandatory here on purpose: this is the call the detection loop uses, and the
+        brief says every query is scoped to one vendor server-side. Stops when the page index
+        reaches X-BT-Pagination-Last-Page, or after the first page if that header is missing.
+        """
+        page = 1
+        while True:
+            users, info = self.get_users(security_provider_id=security_provider_id, current_page=page)
+            for user in users:
+                yield user
+            if not users or info.last_page is None or page >= info.last_page:
+                return
+            page += 1
+
+    def get_user_group_policies(self, user_id: int) -> Tuple[List[Dict[str, Any]], PageInfo]:
+        """GET /api/config/v1/user/{id}/group-policies — GroupPolicy resources (id, name, ...) the
+        user is currently a member of.
+
+        The spec declares pagination *headers* on this response but no per_page/current_page query
+        parameters, so none are sent — the Configuration API answers 401 to unrecognised parameters.
+        Callers should check PageInfo.last_page and warn if it is above 1.
+        """
+        resp = self.get(f"{self.config_base}/user/{int(user_id)}/group-policies")
+        return resp.json(), PageInfo.from_headers(resp.headers)
+
+    def get_security_provider(self, provider_id: int) -> Dict[str, Any]:
+        """GET /api/config/v1/security-provider/{id} — id, type, name, enabled, user_authentication."""
+        return self.get(f"{self.config_base}/security-provider/{int(provider_id)}").json()
+
+    def get_group_policy(self, policy_id: int) -> Dict[str, Any]:
+        """GET /api/config/v1/group-policy/{id} — the GroupPolicy resource; we only read id and name."""
+        return self.get(f"{self.config_base}/group-policy/{int(policy_id)}").json()
 
     # -- Command API v2 ---------------------------------------------------
 
