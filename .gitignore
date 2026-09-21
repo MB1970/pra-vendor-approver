@@ -1,0 +1,18 @@
+# Secrets — never commit. See CLAUDE.md "Environment".
+.env
+.env.*
+!.env.example
+
+# Claude Code local permissions — per-machine, not project config
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# App store (later stages)
+*.db
+*.sqlite
+*.sqlite3
