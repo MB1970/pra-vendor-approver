@@ -1,0 +1,2 @@
+# Authored on Windows, deployed on Linux. Keep every text file LF in the repo and on checkout.
+* text=auto eol=lf

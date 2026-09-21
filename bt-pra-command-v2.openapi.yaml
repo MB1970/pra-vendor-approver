@@ -1,0 +1,1001 @@
+openapi: '3.0.0'
+info:
+  title: 'BeyondTrust Privileged Remote Access Command APIs'
+  version: '2.0.0'
+  description: >
+    <a id="__overview"></a>
+
+    ## Overview
+
+    The Command APIs are designed to send commands to your BeyondTrust Privileged Remote Access site from an outside application. Commands can start or transfer a session, get a list of logged-in Users, or obtain a list of teams and issues. You can also check the health of your appliance, change an appliance's failover role, or get information about the permissions of the current API Account.
+
+    <a id="__overview_authentication"></a>
+
+    ### Authentication
+
+    The BeyondTrust Privileged Remote Access Command APIs require OAuth 2 credentials for authentication.
+
+    To authenticate to the API, you must create an API account on the **/login > Management > API Configuration** page. The account must have permission to access the Command APIs. Copy the **OAuth Client ID** and **OAuth Client Secret** values before saving the API Account. API requests require a token to be generated using this client id and secret and then submitted with each API request.
+
+    <div class="p-message p-component p-message-info">
+      <span class="p-message-text"><strong>NOTE</strong>: The <strong>OAuth Client Secret</strong> cannot be viewed again after the API Account has been saved, but it can be regenerated when you edit the API Account. Regenerating a client secret and then saving the account immediately invalidates any OAuth tokens associated with the account. Any API calls using those tokens will be unable to access the API. A new token must be generated using the new client secret.</span>
+    </div>
+
+
+    #### Create a token
+
+    Create a token by sending an HTTP POST request to the URL of your BeyondTrust Privileged Remote Access site followed by /oauth2/token:
+
+        https://pf34d701.beyondtrustcloud.com/oauth2/token
+
+    The OAuth client ID and client secret associated with the API account should be Base64 encoded and included in an HTTP basic authorization header:
+
+        Authorization: Basic <base64-encoded "client_id:secret">
+
+    Include the following POST body in the request:
+
+        grant_type=client_credentials
+
+    If the request is processed without error, you will receive an access token JSON response:
+
+        {
+            "access_token": "<token>",
+            "token_type": "Bearer",
+            "expires_in": 3600
+        }
+
+    <div class="p-message p-component p-message-info">
+      <span class="p-message-text"><strong>NOTE</strong>: This token expires after one hour. Any calls to the API past that point must have a new token. Each API account can have a maximum of 30 valid tokens. If an API account attempts to generate more than 30 tokens, then the oldest token is invalidated before a new one is generated.</span>
+    </div>
+
+
+    #### Request an API resource
+
+    Now that you have an access token, you can make HTTPS requests to the Command APIs.
+
+    The token obtained above must be included in an `Authorization` HTTP header with each request:
+
+        Authorization: Bearer <token>
+
+    If the token is valid, you gain access to the requested URL.
+
+    #### Authentication errors
+
+    Requests made to the web API with expired or invalid tokens result in a JSON error response:
+
+        {
+            "error": "access_denied",
+            "message": "The resource owner or authorization server denied the request."
+        }
+
+    <div class="p-message p-component p-message-warn">
+      <span class="p-message-text"><strong>IMPORTANT</strong>: When making consecutive API calls, you must close the connection after each API call.</span>
+    </div>
+
+
+    #### Request rate limits
+
+    Requests are limited to 20 per second and 15,000 per hour.
+
+    This limit applies to all API endpoints and is per API account.
+
+    Responses include headers with the rate limit information:
+
+    Example:
+
+        X-RateLimit-Limit: 15000
+        X-RateLimit-Remaining: 14996
+
+
+    <a id="__overview_request_headers"></a>
+
+    ### Required Request Headers
+
+    In addition to the `Authorization` header mentioned above for OAuth 2 authentication,
+
+      - for `GET` and `DELETE` requests, you must include an `Accept` header with the value `application/json`.
+      - for all other requests where you are sending a JSON request body, you must include a `Content-Type` header with a value of `application/json`.
+
+    <a id="__overview_http_methods"></a>
+
+
+    ### HTTP Request Methods
+
+    The documentation below lists the allowed [HTTP request methods](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods) for each API. Not all methods are allowed for all APIs.
+
+
+    All APIs that document `GET` requests will also accept `HEAD` requests. Responses to `HEAD` requests never include a body. This might be useful if you only wish to use the HTTP status code to determine the existence of a resource or resources identified by the URI, and you do not need the response body.
+
+
+    In addition to the human-readable documentation for each API below, the `OPTIONS` method may be used with any URI to obtain the list of allowed HTTP methods for a given URI. For example, the request
+
+        OPTIONS https://pf34d701.beyondtrustcloud.com/api/command/v2/user
+
+    will respond with an `Allow` header containing a comma-separated list of the HTTP methods that can be used with that URI:
+
+        Allow: GET,HEAD
+
+
+    If you attempt to use an HTTP method with an API that does not support that method, you will receive an HTTP 405 "Method Not Allowed" response.
+
+    <a id="__overview_status_codes"></a>
+
+    ### Common HTTP Status Codes
+
+    Individual APIs may provide specific documentation for certain status codes, but not all possible status codes are documented on every API. The following is a list of the HTTP status codes commonly returned by these APIs and what they usually mean.
+
+    <table>
+    <tr>
+    <th>Status Code</th>
+    <th>Description</th>
+    </tr>
+    <tr>
+    <td>200</td>
+    <td> For a GET query, this indicates the query was successful, though the response may or
+    may not include an empty resource array depending on whether your query parameters
+    matched any resources. For a PATCH request, this indicates the resource was updated
+    successfully, and the response should contain the updated resource object.
+    </td>
+    </tr>
+    <tr>
+    <td>
+    204
+    </td>
+    <td>Indicates an operation—such as a DELETE—completed successfully. The response body should be
+    empty.
+    </td>
+    </tr>
+    <tr>
+    <td>400</td>
+    <td>For a GET operation, this indicates you supplied unrecognized query string parameters;
+    for a POST or PATCH operation, this indicates you supplied unrecognized fields in the
+    request body. Check the documentation to ensure all parameters are spelled correctly.
+    </td>
+    </tr>
+    <tr>
+    <td>403</td>
+    <td>The API Account whose authentication credentials were used for the request does not
+    have permission to use this API. Edit this account on the <a target="_blank" href="https://pf34d701.beyondtrustcloud.com/login/api_account">API Account</a> page and
+    ensure it has permission to use the Command APIs.
+    </td>
+    </tr>
+    <tr>
+    <td>404</td>
+    <td>A request for a specific resource - usually by id - did not match any known
+    resources.
+    </td>
+    </tr>
+    <tr>
+    <td>405</td>
+    <td>Your request contained an <a rel="noopener" target="_blank" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods">HTTP method</a> that is not supported for the URI of the request. The documentation below indicates which methods are allowed for each API endpoint. Methods that are not specifically documented are not allowed, except for HEAD and OPTIONS as mentioned in the <a href="#__overview_http_methods">HTTP Request Methods</a> section above.
+    </td>
+    </tr>
+    <tr>
+    <td>422</td>
+    <td>This can happen when attempting to create or update a resource with malformed data. The
+    response body should contain a validation error dictionary indicating which fields are
+    invalid and how they are invalid.
+    </td>
+    </tr>
+    <tr>
+    <td>500</td>
+    <td>An internal server error occurred. Please contact BeyondTrust support.</td>
+    </tr>
+    </tr>
+    </table>
+
+
+    <a id="__overview_date_times"></a>
+
+
+    ### Date-Time Formatting and Time Zones
+
+    All date-time values should be in [RFC3339 Internet Date-Time Format](https://tools.ietf.org/html/rfc3339#section-5.6) in UTC unless otherwise noted.
+
+    When submitting date-time values to these APIs, milliseconds are optional and will be ignored. A UTC timezone must be included to avoid ambiguity, represented with either the "Z" suffix or a "+00:00" offset suffix.
+
+    #### Valid Examples
+
+    - `2025-10-16T14:46:25.930+00:00`
+
+    - `2026-10-16T14:46:23+00:00`
+
+    - `2025-10-16T14:46:25.930Z`
+
+    - `2026-10-16T14:46:23Z`
+
+
+    #### Invalid Examples
+
+    - **INVALID** `2025-10-16T14:46:25.930`: Missing timezone; not a valid RFC3339 string.
+
+    - **INVALID** `2026-10-16T14:46:23`: Missing timezone; not a valid RFC3339 string.
+
+    - **INVALID** `2025-10-16T14:46:25.930-08:00`: Non-UTC timezone; valid RFC3339 string but not allowed by these APIs.
+
+    - **INVALID** `2026-10-16T14:46:23+04:00`: Non-UTC timezone; valid RFC3339 string but not allowed by these APIs.
+
+
+    Date-time strings in responses will always include a "+00:00" timezone offset suffix - never a "Z" suffix.
+
+    <a id="__overview_integers"></a>
+
+
+    ### Integers
+
+    Request body parameters that are marked as type "integer" must be supplied as actual JSON numbers, not strings containing a number. For example, if the documentation indicates a request body field named `team_id` is an integer, then the object `{ team_id: 42 }` would be valid, but the object `{ team_id: "42" }` would be invalid.
+
+
+    <a id="__overview_changes"></a>
+
+
+    ### Changes
+
+    From time to time, new fields may be added to existing API responses to support new features, without changing any existing fields. Ensure that your client code is written in such a way it can handle or ignore these minor additions to existing API responses.
+
+  contact:
+    email: support@BeyondTrust.com
+
+externalDocs:
+  description: Find out more about BeyondTrust Remote Access APIs
+  url: https://docs.beyondtrust.com/pra/docs/api
+
+servers:
+  - url: https://pf34d701.beyondtrustcloud.com/api/command/v2
+
+paths:
+  /openapi.yaml:
+    get:
+      summary: Get this API documentation in OpenAPI v3 YAML format.
+      description: |
+        This returns a YAML document containing an [OpenAPI specification](https://learn.openapis.org/specification/) for all available BeyondTrust Privileged Remote Access Command APIs. [Many tools](https://tools.openapis.org/) exist that can read this document and generate resources you may find helpful. For instance, some tools can help generate client code for interacting with the API. Other tools are able to generate various forms of API documentation. (If you're reading this on a web page, the page was probably generated from a response to this API.)
+      operationId: api.command.v2.spec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/yaml:
+              schema:
+                type: object
+
+  /info:
+    get:
+      summary: Retrieve API metadata
+      description: Returns general information about the Command APIs, such as version, as well as the permissions of the API Account whose credentials were used to authenticate the request.
+      operationId: api.command.v2.info.get
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permissions:
+                    type: object
+                    description: The current API Account's permissions.
+                    properties:
+                      perm_backup:
+                        type: boolean
+                        description: Indicates whether the API account has permission to use the backup API.
+                      perm_command:
+                        type: string
+                        enum: [ full_access, read_only, deny ]
+                        description: Indicates whether the API account has read / write access (full_access) to the command API, read-only access (read_only), or no access (deny).
+                      perm_configuration:
+                        type: boolean
+                        description: Indicates whether the API account has permission to use the Configuration API.
+                      perm_configuration_vault_account:
+                        type: boolean
+                        description: Indicates whether the API account has permission to manage Vault accounts via the Configuration API.
+                      perm_ecm:
+                        type: boolean
+                        description: Indicates whether the API account can be used by an Endpoint Credential Manager client to connect to the appliance.
+                      perm_reporting_asset:
+                        type: boolean
+                        description: Indicates whether the API account has permission to use the Asset reporting API.
+                      perm_reporting_duplicate_jump_client:
+                        type: boolean
+                        description: Indicates whether the API account has permission to use the Duplicate Jump Clients reporting API.
+                      perm_reporting_license:
+                        type: boolean
+                        description: Indicates whether the API account has permission to use the license usage reporting API.
+                      perm_reporting_session:
+                        type: boolean
+                        description: Indicates whether the API account has permission to view session reports and recordings.
+                      perm_reporting_syslog:
+                        type: boolean
+                        description: Indicates whether the API account has permission to download Syslog reports.
+                      perm_reporting_vault:
+                        type: boolean
+                        description: Indicates whether the API account has permission to run Vault Activity reports.
+                      perm_vault_backup:
+                        type: boolean
+                        description: Indicates whether the API account has permission to backup the Vault encryption key, the key used to encrypt and decrypt all the Vault credentials stored on the appliance.
+                      perm_scim:
+                        type: boolean
+                        description: Indicates whether the API account has permission to use the SCIM API.
+                  current_time:
+                    type: string
+                    format: date-time
+                    description: The server’s current date and time in UTC.
+                  command_api_version:
+                    type: string
+                    description: The version of the Command API used to make this request.
+                  config_api_version:
+                    type: string
+                    description: The latest supported version of the Configuration API.
+                  reporting_api_version:
+                    type: string
+                    description: The latest supported version of the Reporting API.
+                  backup_api_version:
+                    type: string
+                    description: The latest supported version of the Backup API.
+                  product:
+                    type: string
+                    enum: [ rs, pra ]
+                    description: 'The product type of the appliance: "rs" for Remote Support and "pra" for Privileged Remote Access.'
+
+  /health:
+    get:
+      summary: Returns appliance health information.
+      description: Returns appliance health and status information needed for failover purposes. If this request is sent more than once per minute, a cached response may be returned.
+      operationId: api.command.v2.health.get
+      responses:
+        '200':
+          description: A healthy response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthBase'
+        '500':
+          description: An unhealthy response containing the base health check response along with an error message. Some fields may be null.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/MessageResponse'
+                  - $ref: '#/components/schemas/HealthBase'
+
+  /appliance:
+    get:
+      summary: List appliances
+      description: Returns information about all configured appliances, including their failover role and cluster role.
+      operationId: api.command.v2.appliance.index
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                description: A list of appliances.
+                items:
+                  type: object
+                  properties:
+                    id:
+                      $ref: "#/components/schemas/ApplianceId"
+                    name:
+                      type: string
+                      description: The name of the appliance.
+                    public_hostname:
+                      type: string
+                      description: The public hostname of the appliance.
+                    cluster_role:
+                      type: string
+                      enum: [ single, primary, traffic ]
+                      description: The role the appliance plays in a cluster. If not part of a cluster, the role will be "single".
+                    failover_role:
+                      type: string
+                      enum: [ none, primary, backup ]
+                      description: The role the appliance plays in a failover relationship.
+                    accepting_connections:
+                      type: boolean
+                      description: Indicates whether this appliance accepts new client connections. If not part of a cluster, this will always be true.
+                    timezone_offset:
+                      type: integer
+                      description: The number of seconds away from UTC.
+                  required:
+                    - id
+                    - name
+                    - public_hostname
+                    - cluster_role
+                    - failover_role
+                    - accepting_connections
+                    - timezone_offset
+
+  /appliance/client-count:
+    get:
+      summary: Get client counts for each appliance.
+      description: Get a list of appliances along with counts for each type of client connected to that appliance.
+      operationId: api.command.v2.appliance.count
+      parameters:
+        - in: query
+          name: type
+          schema:
+            type: string
+            description: Optional client type to filter by. If this is omitted, all client types are returned.
+            enum: [ access_console, asset_client, gateway ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - id
+                    - access_consoles
+                    - asset_clients
+                    - gateways
+                  properties:
+                    id:
+                      $ref: "#/components/schemas/ApplianceId"
+                    access_consoles:
+                      type: integer
+                      minimum: 0
+                      description: Number of connected Access Console clients.
+                    asset_clients:
+                      type: integer
+                      minimum: 0
+                      description: Number of connected Asset clients.
+                    gateways:
+                      type: integer
+                      minimum: 0
+                      description: Number of connected Gateway clients.
+
+  /client:
+    get:
+      summary: Get list of connected clients
+      description: Get details of all connected BeyondTrust Privileged Remote Access clients, optionally filtered by client type.
+      operationId: api.command.v2.client.index
+      parameters:
+        - in: query
+          name: type
+          schema:
+            type: string
+            description: Optional client type to filter by. If this is omitted, all client types are returned.
+            enum: [ access_console, asset_client, gateway ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                minLength: 0
+                description: Array of the connected clients.
+                items:
+                  oneOf:
+                    - $ref: "#/components/schemas/AccessConsole"
+                    - $ref: "#/components/schemas/AssetClient"
+                    - $ref: "#/components/schemas/Gateway"
+                  discriminator:
+                    propertyName: type
+                    mapping:
+                      access_console: '#/components/schemas/AccessConsole'
+                      asset_client: '#/components/schemas/AssetClient'
+                      gateway: '#/components/schemas/Gateway'
+  /client/{id}:
+    get:
+      summary: Get connected client details
+      description: Get details of a connected client identified by `{id}`.
+      operationId: api.command.v2.client.show
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            $ref: '#/components/schemas/ObjectId'
+          description: A unique identifier which remains valid only while the client is connected.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/AccessConsole"
+                  - $ref: "#/components/schemas/AssetClient"
+                  - $ref: "#/components/schemas/Gateway"
+                discriminator:
+                  propertyName: type
+                  mapping:
+                    access_console: '#/components/schemas/AccessConsole'
+                    asset_client: '#/components/schemas/AssetClient'
+                    gateway: '#/components/schemas/Gateway'
+        '404':
+          $ref: '#/components/responses/404NotFound'
+
+  /client/{id}/connections:
+    get:
+      summary: Get client connections
+      description: Get a list of connections and an event log about those connections for the client with the given `{id}`.
+      operationId: api.command.v2.client.connections.index
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            $ref: '#/components/schemas/ObjectId'
+          description: A unique identifier which remains valid only while the client is connected.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - connections
+                  - events
+                properties:
+                  id:
+                    type: integer
+                    format: int32
+                    minimum: 1
+                    maximum: 2147483647
+                    description: A unique identifier which remains valid only while the client is connected.
+                  connections:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - appliance_id
+                        - purpose
+                        - receive_traffic_node
+                        - connected_since
+                        - private_ip
+                      properties:
+                        appliance_id:
+                          $ref: "#/components/schemas/ApplianceId"
+                        purpose:
+                          type: string
+                          enum: [ primary, traffic ]
+                          description: The reason the client is connected to this appliance. If not part of a cluster, this will always be "primary".
+                        receive_traffic_node:
+                          type: boolean
+                          description: Indicates whether this is the client's default traffic node or not. If not part of a cluster, this will always be false.
+                        connected_since:
+                          type: string
+                          format: date-time
+                          description: The date and time at which the client connected.
+                        private_ip:
+                          type: string
+                          description: The client's private IP address that was used to connect to the appliance.
+                  events:
+                    type: array
+                    maxLength: 20
+                    description: An item is returned for up to the last 20 events that have taken place during this connection. Events detail when and why a client connected to an appliance. Events also include failures to connect to nodes and normal disconnects.
+                    items:
+                      type: object
+                      required:
+                        - time
+                        - message
+                      properties:
+                        time:
+                          type: string
+                          format: date-time
+                          description: The date and time of the event.
+                        message:
+                          type: string
+                          description: Event description.
+        '404':
+          $ref: '#/components/responses/404NotFound'
+
+
+  /session/{lsid}:
+    get:
+      summary: Get session attributes
+      description: Returns attributes for an active support session identified by `{lsid}`.
+      operationId: api.command.v2.session.get.attributes
+      parameters:
+        - in: path
+          name: lsid
+          required: true
+          schema:
+            $ref: '#/components/schemas/LSID'
+          description: A string which uniquely identifies the session whose attributes you want to get.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                description: Array of objects describing session attributes.
+                items:
+                  type: object
+                  description: An attribute's names and value.
+                  properties:
+                    code_name:
+                      allOf:
+                        - $ref: '#/components/schemas/CodeName'
+                      description: The code name of a custom field / attribute.
+                    display_name:
+                      type: string
+                      description: The user-facing label for the custom field / attribute.
+                    value:
+                      type: string
+                      description: The value of the custom field / attribute.
+
+    patch:
+      summary: Set session attributes
+      description: Set the external key or other custom session attributes / fields for an active support session identified by `{lsid}`. Each field is identified using its code name as configured in /login on the **Configuration > Custom Fields** page.
+      operationId: api.command.v2.session.set.attributes
+      parameters:
+        - in: path
+          name: lsid
+          required: true
+          schema:
+            $ref: '#/components/schemas/LSID'
+          description: A string which uniquely identifies the session whose attributes you want to change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: The code names and values of custom fields. Each value has a maximum length of 1024 characters. A maximum of 30 fields may be set in one request. These fields must first be configured in /login on the **Configuration > Custom Fields** page.
+              additionalProperties:
+                type: string
+                maxLength: 1024
+
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Too many attributes were sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '404':
+          $ref: '#/components/responses/404NotFound'
+        '422':
+          $ref: '#/components/responses/422UnprocessableEntity'
+
+    delete:
+      summary: Terminate a session
+      description: Terminates an active support session identified by `{lsid}`.
+      operationId: api.command.v2.session.terminate
+      parameters:
+        - in: path
+          name: lsid
+          required: true
+          schema:
+            $ref: '#/components/schemas/LSID'
+          description: A string which uniquely identifies the session you want to terminate.
+      responses:
+        '204':
+          description: Session terminated successfully.
+        '404':
+          $ref: '#/components/responses/404NotFound'
+
+
+  /user:
+    get:
+      summary: Get logged-in Users
+      description: Get a list of all logged-in Users, both normal and invited.
+      operationId: api.command.v2.user.index
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                      maximum: 2147483647
+                    type:
+                      type: string
+                      enum: [ normal, invited ]
+                    display_name:
+                      type: string
+                      minLength: 1
+                      maxLength: 64
+                      description: The User's display name.
+                    logged_in_since:
+                      type: string
+                      format: date-time
+                      description: The date and time at which the User logged in.
+                    session_count:
+                      type: integer
+                      description: The number of active sessions the User is currently participating in.
+
+
+  /user/{id}/logout:
+    post:
+      summary: Force User logout.
+      description: Force the logged-in User identified by `{id}` to log out.
+      operationId: api.command.v2.user.logout
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            $ref: '#/components/schemas/ObjectId'
+          description: The id of the User that you want to force to log out.
+      responses:
+        '204':
+          description: Indicates the User was logged out successfully.
+        '404':
+          $ref: '#/components/responses/404NotFound'
+        '422':
+          $ref: '#/components/responses/422UnprocessableEntity'
+
+
+
+  /failover-role:
+    post:
+      summary: Set failover role
+      description: Set the failover role of an appliance to either primary or backup.
+      operationId: api.command.v2.failover-role.set
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - role
+              properties:
+                role:
+                  type: string
+                  enum: [ primary, backup ]
+                  description: The role to assign to the appliance.
+                data_sync_first:
+                  type: boolean
+                  default: false
+                  description: |
+                    To perform a data sync with the peer appliance before failing over, set this to true. All users on the existing primary appliance will be disconnected during the data sync, and no other operations will be available until the swap is complete.
+
+                    To fail over without a final data sync, set this to false or omit this field.
+                force:
+                  type: boolean
+                  default: false
+                  description: |
+                    This option is only applicable when contacting the primary appliance and attempting to set its role to "backup".
+
+                    If this is set to true, then this appliance will become the backup even if the peer appliance cannot be contacted.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '422':
+          $ref: '#/components/responses/422UnprocessableEntity'
+        '500':
+          description: The failover operation failed for an unexpected reason.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+
+
+components:
+  schemas:
+    ObjectId:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 2147483647
+
+    ApplianceId:
+      type: string
+      pattern: '^[0-9a-fA-F]{32}$'
+      description: GUID of an appliance.
+
+    Username:
+      type: string
+      description: The username of a User.
+
+    LSID:
+      type: string
+      pattern: '^[0-9a-fA-F]{32}$'
+      description: A string which uniquely identifies a session.
+
+    CodeName:
+      type: string
+      maxLength: 64
+      minLength: 0
+      pattern: '^[a-zA-Z0-9_\\-]+$'
+      description: The code name of a resource. This value must be unique.
+
+    MessageResponse:
+      type: object
+      description: A message about a the general success or failure of a request.
+      properties:
+        message:
+          type: string
+
+    ErrorBagResponse:
+      type: object
+      description: Key-value pairs where the keys are request field names and the values are arrays of error messages about that field. Normally used for input data validation errors.
+      additionalProperties:
+        type: array
+        items:
+          type: string
+
+    IPv4Address:
+      type: string
+      format: ipv4
+
+    IPv6Address:
+      type: string
+      format: ipv6
+
+    Client:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 2147483647
+          description: A unique identifier which remains valid only while the client is connected.
+        type:
+          type: string
+          description: Client type
+          enum: [ access_console, asset_client, gateway ]
+        hostname:
+          type: string
+          description: The hostname of the client machine.
+        platform:
+          type: string
+          description: The operating system of the client machine.
+        timezone_offset:
+          type: string
+          description: The number of seconds away from UTC of the client machine.
+      required:
+        - id
+        - type
+        - hostname
+        - platform
+        - timezone_offset
+
+    AccessConsole:
+      allOf:
+        - $ref: "#/components/schemas/Client"
+        - type: object
+          properties:
+            user_id:
+              allOf:
+                - $ref: '#/components/schemas/ObjectId'
+              description: The id of the User.
+            user_type:
+              type: string
+              enum: [ normal, invited ]
+              description: The type of account the User is using.
+            username:
+              type: string
+              description: The username assigned to the User.
+            display_name:
+              type: string
+              description: The display name assigned to the User.
+            session_count:
+              type: integer
+              description: The number of sessions the User is participating in.
+            session_lsids:
+              type: array
+              description: Contains an LSID string for each session in which the User is participating.
+              items:
+                $ref: '#/components/schemas/LSID'
+          required:
+            - user_id
+            - user_type
+            - username
+            - display_name
+            - session_count
+            - session_lsids
+
+    AssetClient:
+      allOf:
+        - $ref: "#/components/schemas/Client"
+        - type: object
+          properties:
+            non_interactive:
+              type: string
+              enum: [ shell, rdp ]
+              description: Indicates if the session is a remote desktop protocol (RDP) session or a shell session. If neither, this element is not returned.
+            lsid:
+              $ref: '#/components/schemas/LSID'
+          required:
+            - lsid
+
+    Gateway:
+      allOf:
+        - $ref: "#/components/schemas/Client"
+
+    HealthBase:
+      type: object
+      required:
+        - version
+        - build
+        - appliance_hostname
+        - appliance_id
+        - cluster_role
+        - failover_role
+        - enabled_shared_ips
+        - last_data_sync
+        - last_data_sync_status
+      properties:
+        version:
+          type: string
+          description: BeyondTrust Privileged Remote Access product version.
+        build:
+          type: string
+          description: BeyondTrust Privileged Remote Access product build number.
+        appliance_hostname:
+          type: string
+          description: Host name of the appliance.
+        appliance_id:
+          $ref: "#/components/schemas/ApplianceId"
+        cluster_role:
+          type: string
+          enum: [ single, primary, traffic ]
+          description: The role the appliance plays in a cluster. If not part of a cluster, the value will be "single".
+        failover_role:
+          type: string
+          enum: [ none, primary, backup ]
+          description: The role the appliance plays in a failover relationship. If failover is not configured, the value will be "none".
+        enabled_shared_ips:
+          type: array
+          nullable: true
+          description: A list of each IP address that is shared between the primary and backup appliances. If no shared IP addresses are enabled, this field will not be returned.
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/IPv4Address"
+              - $ref: "#/components/schemas/IPv6Address"
+        last_data_sync:
+          type: string
+          format: date-time
+          nullable: true
+          description: The date and time at which the last data sync occurred between the primary and backup appliances if this is the primary appliance in a failover relationship. Otherwise this field will be null.
+        last_data_sync_status:
+          type: string
+          nullable: true
+          description: A string showing the status of the last data sync if this is the primary appliance in a failover relationship. Otherwise this field will be null.
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      description: Unique identifier for the resource.
+      required: true
+      schema:
+        $ref: '#/components/schemas/ObjectId'
+
+  responses:
+    404NotFound:
+      description: The specified resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MessageResponse'
+
+    422UnprocessableEntity:
+      description: One or more request parameters are invalid. The body contains a general error message as well as a validation error dictionary.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/MessageResponse'
+              - properties:
+                  errors:
+                    $ref: '#/components/schemas/ErrorBagResponse'
